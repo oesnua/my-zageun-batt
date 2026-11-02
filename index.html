@@ -19,26 +19,31 @@
     #season-text { font-size: 14px; font-weight: bold; color: #2ecc71; margin-bottom: 2px; }
     #weather-text { color: #74b9ff; }
 
+    /* 우측 상단 인벤토리 UI */
     #inventory-panel {
       position: absolute; top: 12px; right: 12px; z-index: 10; color: #fff;
-      background: rgba(0, 0, 0, 0.65); padding: 10px 14px; border-radius: 12px;
-      backdrop-filter: blur(8px); font-size: 12px; min-width: 120px;
+      background: rgba(0, 0, 0, 0.75); padding: 12px 16px; border-radius: 14px;
+      backdrop-filter: blur(8px); font-size: 13px; min-width: 150px; border: 1px solid rgba(255,255,255,0.2);
     }
-    #inventory-panel h4 { margin: 0 0 6px 0; font-size: 13px; color: #f1c40f; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; }
-    .inv-item { margin-bottom: 4px; cursor: pointer; }
+    #inventory-panel h4 { margin: 0 0 8px 0; font-size: 14px; color: #f1c40f; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px; }
+    .inv-item {
+      padding: 6px 10px; margin-bottom: 6px; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer; transition: 0.2s;
+    }
+    .inv-item.selected { background: #2ecc71; border-color: #2ecc71; font-weight: bold; }
 
-    #seed-selector {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
-      display: flex; gap: 6px; background: rgba(0, 0, 0, 0.7); padding: 8px 12px;
-      border-radius: 30px; backdrop-filter: blur(8px);
+    /* 씨앗 심기 전용 버튼 (팝업 형태) */
+    #plant-btn-container {
+      display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 90;
     }
-    .seed-btn {
-      padding: 8px 12px; font-size: 12px; border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 20px; background: rgba(255,255,255,0.1); color: #fff; cursor: pointer; transition: 0.2s;
+    #btn-plant-action {
+      padding: 12px 32px; font-size: 16px; font-weight: bold; color: #fff; background: #2ecc71;
+      border: 2px solid #ffffff; border-radius: 30px; cursor: pointer;
+      box-shadow: 0 6px 20px rgba(46, 204, 113, 0.6); transition: transform 0.1s;
     }
-    .seed-btn.active { background: #2ecc71; border-color: #2ecc71; font-weight: bold; }
+    #btn-plant-action:active { transform: scale(0.95); }
 
-    /* 팝업 모달 */
+    /* 수확 팝업 모달 */
     #replant-modal {
       display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       z-index: 100; background: rgba(20, 20, 20, 0.95); color: #fff; padding: 20px 28px;
@@ -56,19 +61,17 @@
   <div id="ui-panel">
     <div id="season-text">🌸 현재 절기: 봄 (00:00)</div>
     <div id="weather-text">서울 실시간 날씨 로딩 중...</div>
-    <div style="margin-top: 4px; opacity: 0.8;">💡 <b>조작:</b> 화면 터치/클릭 이동 | 밭 터치(재배)</div>
+    <div style="margin-top: 4px; opacity: 0.8;">💡 <b>조작:</b> 밭 선택 ➔ 인벤토리 씨앗 선택 ➔ [🌱 심기] 터치</div>
   </div>
 
   <div id="inventory-panel">
     <h4>🎒 보관함 (씨앗)</h4>
-    <div id="inv-list">씨앗 없음</div>
+    <div id="inv-list"></div>
   </div>
 
-  <div id="seed-selector">
-    <button class="seed-btn active" data-crop="lettuce">🥬 봄: 상추</button>
-    <button class="seed-btn" data-crop="corn">🌽 여름: 옥수수</button>
-    <button class="seed-btn" data-crop="sweetpotato">🍠 가을: 고구마</button>
-    <button class="seed-btn" data-crop="napa">🥬 겨울: 배추</button>
+  <!-- 씨앗 심기 버튼 팝업 -->
+  <div id="plant-btn-container">
+    <button id="btn-plant-action">🌱 [상추 씨] 심기</button>
   </div>
 
   <div id="replant-modal">
@@ -94,7 +97,8 @@
 
     const game = new Phaser.Game(config);
     let player, targetPoint, rainEmitter, snowEmitter, dayNightOverlay, seasonOverlay;
-    let selectedCrop = 'lettuce';
+    let activeSelectedPlot = null;   // 현재 플레이어가 서있거나 선택한 밭
+    let selectedInvSeed = 'lettuce'; // 인벤토리에서 선택한 씨앗
     let currentHarvestPlot = null;
     let isMovingToTarget = false;
     const plots = [];
@@ -109,7 +113,8 @@
       napa: { name: '배추 씨', color: 0x27ae60, time1: 120000, time2: 60000, isUnderground: false }
     };
 
-    const inventory = { lettuce: 0, corn: 0, sweetpotato: 0, napa: 0 };
+    // 처음에는 씨앗 기본 제공 (테스트 및 시작용 각 2개씩)
+    const inventory = { lettuce: 2, corn: 2, sweetpotato: 2, napa: 2 };
     const SEASONS = [
       { name: '봄 🌸', tint: 0x000000, alpha: 0 },
       { name: '여름 ☀️', tint: 0xfffa65, alpha: 0.08 },
@@ -120,7 +125,6 @@
     let seasonStartTime = 0;
 
     function preload() {
-      // 1. 밀짚모자를 쓴 탑뷰 캐릭터 SVG
       const playerSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="28" fill="#e74c3c"/>
         <circle cx="32" cy="24" r="16" fill="#ffe0bd"/>
@@ -128,7 +132,6 @@
         <circle cx="32" cy="32" r="8" fill="#d35400"/>
       </svg>`;
 
-      // 2. 부드럽고 둥근 입체 흙 밭 타일 SVG (더 이상 네모나지 않음)
       const dirtSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
         <rect width="100" height="100" fill="#795548" rx="20"/>
         <rect x="6" y="6" width="88" height="88" fill="#5d4037" rx="16"/>
@@ -149,10 +152,8 @@
     function create() {
       const scene = this;
 
-      // 배경 격자 패턴
       this.add.grid(0, 0, 3000, 3000, 64, 64, 0x55efc4, 1, 0x48dbfb, 0.2);
 
-      // 4x4 텃밭 타일 생성
       const startX = -180;
       const startY = -180;
       for (let row = 0; row < 4; row++) {
@@ -160,7 +161,6 @@
           const x = startX + col * 120;
           const y = startY + row * 120;
 
-          // 둥근 밭 이미지 타일 적용
           const tile = this.add.image(x, y, 'dirt').setInteractive().setScale(1);
           const cropGraphic = this.add.circle(x, y, 0, 0xffffff);
 
@@ -170,21 +170,25 @@
           };
 
           tile.on('pointerdown', () => {
+            activeSelectedPlot = plotData;
             moveTo(x, y);
-            handlePlotClick.call(scene, plotData);
+            
+            // 물주기 단계이거나 수확 단계일 때 즉시 클릭 상호작용
+            if (plotData.state === 'seeded') waterCrop(scene, plotData);
+            else if (plotData.state === 'fully_grown') harvestCrop(plotData);
+
+            checkShowPlantButton();
           });
 
           plots.push(plotData);
         }
       }
 
-      // 화면 어디든 터치/클릭하면 해당 위치로 캐릭터 부드럽게 이동
       this.input.on('pointerdown', (pointer) => {
         const worldPoint = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         moveTo(worldPoint.x, worldPoint.y);
       });
 
-      // 분위기 오버레이
       seasonOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x000000).setScrollFactor(0).setAlpha(0);
       dayNightOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x05051a).setScrollFactor(0).setAlpha(0);
 
@@ -195,13 +199,11 @@
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
       });
 
-      // 플레이어 캐릭터 생성
       player = this.physics.add.sprite(0, 300, 'player').setScale(0.85);
       targetPoint = new Phaser.Math.Vector2(0, 300);
 
       this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-      // 날씨 효과
       rainEmitter = this.add.particles(0, 0, 'drop', {
         x: { min: -1000, max: 1000 }, y: -600,
         speedY: { min: 500, max: 800 }, lifespan: 1200, quantity: 4
@@ -227,7 +229,6 @@
     }
 
     function update(time) {
-      // 터치한 곳으로 부드럽게 걸어가기
       if (isMovingToTarget) {
         const distance = Phaser.Math.Distance.Between(player.x, player.y, targetPoint.x, targetPoint.y);
         if (distance < 10) {
@@ -238,7 +239,6 @@
         }
       }
 
-      // 계절 시계 업데이트
       const elapsed = Math.floor((time - seasonStartTime) / 1000);
       const remainingSec = Math.max(0, (SEASON_DURATION / 1000) - (elapsed % (SEASON_DURATION / 1000)));
       const min = String(Math.floor(remainingSec / 60)).padStart(2, '0');
@@ -261,12 +261,32 @@
       });
     }
 
-    function handlePlotClick(plot) {
-      if (plot.state === 'empty') plantSeed(plot, selectedCrop);
-      else if (plot.state === 'seeded') waterCrop(this, plot);
-      else if (plot.state === 'fully_grown') harvestCrop(plot);
+    // 조건 충족 시 하단 심기 버튼 노출
+    function checkShowPlantButton() {
+      const btnContainer = document.getElementById('plant-btn-container');
+      const plantBtn = document.getElementById('btn-plant-action');
+
+      if (activeSelectedPlot && activeSelectedPlot.state === 'empty' && selectedInvSeed && inventory[selectedInvSeed] > 0) {
+        plantBtn.innerText = `🌱 [${CROP_DATA[selectedInvSeed].name}] 심기`;
+        btnContainer.style.display = 'block';
+      } else {
+        btnContainer.style.display = 'none';
+      }
     }
 
+    // 🌱 심기 버튼 클릭 시 (1번 로직 실행)
+    document.getElementById('btn-plant-action').addEventListener('click', () => {
+      if (activeSelectedPlot && activeSelectedPlot.state === 'empty' && selectedInvSeed && inventory[selectedInvSeed] > 0) {
+        inventory[selectedInvSeed]--; // 인벤토리 차감
+        updateInventoryUI();
+
+        // 1. 씨 뿌리기 실행
+        plantSeed(activeSelectedPlot, selectedInvSeed);
+        document.getElementById('plant-btn-container').style.display = 'none';
+      }
+    });
+
+    // 1단계: 씨 뿌리기
     function plantSeed(plot, cropType) {
       plot.state = 'seeded';
       plot.cropType = cropType;
@@ -274,19 +294,22 @@
       plot.graphic.setRadius(6).setFillStyle(0xdfe6e9);
     }
 
+    // 2 & 3단계: 물주기 ➔ 즉시 싹 피우기 & 4/5단계 타이머 시작
     function waterCrop(scene, plot) {
       plot.state = 'sprout';
-      plot.tile.setTint(0x4e342e); // 물을 머금은 짙은 흙
-      plot.graphic.setRadius(12).setFillStyle(0x2ecc71);
+      plot.tile.setTint(0x4e342e); // 물 머금은 흙
+      plot.graphic.setRadius(12).setFillStyle(0x2ecc71); // 3. 즉시 싹
 
       const crop = CROP_DATA[plot.cropType];
 
+      // 4단계: 2분 뒤 작은 열매 (땅 속 작물 연출)
       plot.timer1 = scene.time.delayedCall(crop.time1, () => {
         if (plot.state !== 'sprout') return;
         plot.state = 'small_fruit';
         plot.graphic.setRadius(20);
         plot.graphic.setFillStyle(crop.isUnderground ? 0x8e44ad : crop.color);
 
+        // 5단계: 또 1분 뒤 완전 성장
         plot.timer2 = scene.time.delayedCall(crop.time2, () => {
           if (plot.state !== 'small_fruit') return;
           plot.state = 'fully_grown';
@@ -295,6 +318,7 @@
       });
     }
 
+    // 6단계: 수확하기 ➔ 7단계 팝업
     function harvestCrop(plot) {
       currentHarvestPlot = plot;
       const cropName = CROP_DATA[plot.cropType].name;
@@ -302,6 +326,7 @@
       document.getElementById('replant-modal').style.display = 'block';
     }
 
+    // 8-1. 예 선택 ➔ 즉시 1번(씨 뿌리기) 실행
     document.getElementById('btn-yes').addEventListener('click', () => {
       document.getElementById('replant-modal').style.display = 'none';
       if (currentHarvestPlot) {
@@ -311,6 +336,7 @@
       }
     });
 
+    // 8-2. 아니요 선택 ➔ 인벤토리에 저장
     document.getElementById('btn-no').addEventListener('click', () => {
       document.getElementById('replant-modal').style.display = 'none';
       if (currentHarvestPlot) {
@@ -328,6 +354,7 @@
       if (plot.timer2) plot.timer2.remove();
     }
 
+    // 인벤토리 UI 업데이트 및 씨앗 선택 기능
     function updateInventoryUI() {
       const listEl = document.getElementById('inv-list');
       listEl.innerHTML = '';
@@ -337,26 +364,20 @@
         if (inventory[key] > 0) {
           hasItem = true;
           const itemEl = document.createElement('div');
-          itemEl.className = 'inv-item';
-          itemEl.innerText = `${CROP_DATA[key].name} x ${inventory[key]}`;
-          itemEl.onclick = () => {
-            selectedCrop = key;
-            document.querySelectorAll('.seed-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`[data-crop="${key}"]`).classList.add('active');
+          itemEl.className = 'inv-item' + (selectedInvSeed === key ? ' selected' : '');
+          itemEl.innerText = `${CROP_DATA[key].name} (${inventory[key]}개)`;
+          
+          itemEl.onclick = (e) => {
+            e.stopPropagation();
+            selectedInvSeed = key;
+            updateInventoryUI();
+            checkShowPlantButton();
           };
           listEl.appendChild(itemEl);
         }
       });
       if (!hasItem) listEl.innerText = '씨앗 없음';
     }
-
-    document.querySelectorAll('.seed-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.seed-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        selectedCrop = e.target.dataset.crop;
-      });
-    });
 
     async function fetchSeoulWeather() {
       const infoEl = document.getElementById('weather-text');
