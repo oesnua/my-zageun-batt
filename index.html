@@ -120,7 +120,7 @@
     let seasonStartTime = 0;
 
     function preload() {
-      // 캐릭터 SVG (탑뷰 농부 캐릭터)
+      // 1. 밀짚모자를 쓴 탑뷰 캐릭터 SVG
       const playerSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
         <circle cx="32" cy="32" r="28" fill="#e74c3c"/>
         <circle cx="32" cy="24" r="16" fill="#ffe0bd"/>
@@ -128,12 +128,13 @@
         <circle cx="32" cy="32" r="8" fill="#d35400"/>
       </svg>`;
 
-      // 디테일한 흙 타일 SVG
+      // 2. 부드럽고 둥근 입체 흙 밭 타일 SVG (더 이상 네모나지 않음)
       const dirtSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-        <rect width="100" height="100" fill="#795548" rx="12"/>
-        <rect x="5" y="5" width="90" height="90" fill="#5d4037" rx="8"/>
-        <circle cx="30" cy="30" r="4" fill="#3e2723"/>
-        <circle cx="70" cy="65" r="5" fill="#3e2723"/>
+        <rect width="100" height="100" fill="#795548" rx="20"/>
+        <rect x="6" y="6" width="88" height="88" fill="#5d4037" rx="16"/>
+        <circle cx="30" cy="30" r="5" fill="#3e2723" opacity="0.6"/>
+        <circle cx="70" cy="65" r="6" fill="#3e2723" opacity="0.6"/>
+        <circle cx="45" cy="75" r="4" fill="#3e2723" opacity="0.6"/>
       </svg>`;
 
       const dropSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="12"><rect width="4" height="12" rx="2" fill="#74b9ff"/></svg>`;
@@ -148,8 +149,8 @@
     function create() {
       const scene = this;
 
-      // 잔디 밭 배경 타일링
-      const bg = this.add.grid(0, 0, 3000, 3000, 64, 64, 0x55efc4, 1, 0x48dbfb, 0.3);
+      // 배경 격자 패턴
+      this.add.grid(0, 0, 3000, 3000, 64, 64, 0x55efc4, 1, 0x48dbfb, 0.2);
 
       // 4x4 텃밭 타일 생성
       const startX = -180;
@@ -159,6 +160,7 @@
           const x = startX + col * 120;
           const y = startY + row * 120;
 
+          // 둥근 밭 이미지 타일 적용
           const tile = this.add.image(x, y, 'dirt').setInteractive().setScale(1);
           const cropGraphic = this.add.circle(x, y, 0, 0xffffff);
 
@@ -167,8 +169,7 @@
             state: 'empty', cropType: null, timer1: null, timer2: null, x: x, y: y
           };
 
-          tile.on('pointerdown', (pointer) => {
-            // 터치/클릭 시 이동 및 상호작용
+          tile.on('pointerdown', () => {
             moveTo(x, y);
             handlePlotClick.call(scene, plotData);
           });
@@ -177,13 +178,13 @@
         }
       }
 
-      // 화면 어디든 터치/클릭하면 해당 위치로 캐릭터 이동
+      // 화면 어디든 터치/클릭하면 해당 위치로 캐릭터 부드럽게 이동
       this.input.on('pointerdown', (pointer) => {
         const worldPoint = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         moveTo(worldPoint.x, worldPoint.y);
       });
 
-      // 오버레이 (계절 & 밤낮)
+      // 분위기 오버레이
       seasonOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x000000).setScrollFactor(0).setAlpha(0);
       dayNightOverlay = this.add.rectangle(0, 0, 4000, 4000, 0x05051a).setScrollFactor(0).setAlpha(0);
 
@@ -194,8 +195,8 @@
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
       });
 
-      // 캐릭터 생성
-      player = this.physics.add.sprite(0, 300, 'player').setScale(0.8);
+      // 플레이어 캐릭터 생성
+      player = this.physics.add.sprite(0, 300, 'player').setScale(0.85);
       targetPoint = new Phaser.Math.Vector2(0, 300);
 
       this.cameras.main.startFollow(player, true, 0.1, 0.1);
@@ -226,7 +227,7 @@
     }
 
     function update(time) {
-      // 터치한 지점으로 부드럽게 이동
+      // 터치한 곳으로 부드럽게 걸어가기
       if (isMovingToTarget) {
         const distance = Phaser.Math.Distance.Between(player.x, player.y, targetPoint.x, targetPoint.y);
         if (distance < 10) {
@@ -237,7 +238,7 @@
         }
       }
 
-      // 계절 시간 표시
+      // 계절 시계 업데이트
       const elapsed = Math.floor((time - seasonStartTime) / 1000);
       const remainingSec = Math.max(0, (SEASON_DURATION / 1000) - (elapsed % (SEASON_DURATION / 1000)));
       const min = String(Math.floor(remainingSec / 60)).padStart(2, '0');
@@ -269,13 +270,13 @@
     function plantSeed(plot, cropType) {
       plot.state = 'seeded';
       plot.cropType = cropType;
-      plot.tile.setTint(0xa1887f); // 흙 젖기 준비
+      plot.tile.setTint(0xa1887f);
       plot.graphic.setRadius(6).setFillStyle(0xdfe6e9);
     }
 
     function waterCrop(scene, plot) {
       plot.state = 'sprout';
-      plot.tile.setTint(0x4e342e); // 물에 젖어 짙어진 흙
+      plot.tile.setTint(0x4e342e); // 물을 머금은 짙은 흙
       plot.graphic.setRadius(12).setFillStyle(0x2ecc71);
 
       const crop = CROP_DATA[plot.cropType];
