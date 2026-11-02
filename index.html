@@ -87,7 +87,7 @@
       parent: 'game-container',
       scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
       physics: { default: 'arcade', arcade: { debug: false } },
-      scene: { preload: preload, create: create, update: update }
+      scene: { create: create, update: update }
     };
 
     const game = new Phaser.Game(config);
@@ -108,7 +108,6 @@
       napa: { name: '배추 씨', color: 0x27ae60, time1: 120000, time2: 60000, isUnderground: false }
     };
 
-    // 기본 씨앗 각 2개 제공
     const inventory = { lettuce: 2, corn: 2, sweetpotato: 2, napa: 2 };
     const SEASONS = [
       { name: '봄 🌸', tint: 0x000000, alpha: 0 },
@@ -119,35 +118,48 @@
     let currentSeasonIdx = 0;
     let seasonStartTime = 0;
 
-    function preload() {
-      // 짚모자 농부 캐릭터 그래픽
-      const playerSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="28" fill="#e74c3c"/>
-        <circle cx="32" cy="24" r="16" fill="#ffe0bd"/>
-        <circle cx="32" cy="32" r="22" fill="#f1c40f"/>
-        <circle cx="32" cy="32" r="8" fill="#d35400"/>
-      </svg>`;
+    function generateCustomTextures(scene) {
+      // 1. 둥근 입체 흙 타일 (Phaser Canvas 기반)
+      const gDirt = scene.make.graphics({x:0, y:0, add:false});
+      gDirt.fillStyle(0x795548, 1);
+      gDirt.fillRoundedRect(0, 0, 96, 96, 18);
+      gDirt.fillStyle(0x5d4037, 1);
+      gDirt.fillRoundedRect(6, 6, 84, 84, 14);
+      gDirt.fillStyle(0x3e2723, 0.5);
+      gDirt.fillCircle(25, 25, 5);
+      gDirt.fillCircle(70, 60, 6);
+      gDirt.fillCircle(45, 75, 4);
+      gDirt.generateTexture('dirt_texture', 96, 96);
 
-      // 둥근 입체 흙 밭 타일 그래픽
-      const dirtSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-        <rect width="100" height="100" fill="#795548" rx="20"/>
-        <rect x="6" y="6" width="88" height="88" fill="#5d4037" rx="16"/>
-        <circle cx="30" cy="30" r="5" fill="#3e2723" opacity="0.6"/>
-        <circle cx="70" cy="65" r="6" fill="#3e2723" opacity="0.6"/>
-        <circle cx="45" cy="75" r="4" fill="#3e2723" opacity="0.6"/>
-      </svg>`;
+      // 2. 귀여운 농부 캐릭터 텍스처
+      const gPlayer = scene.make.graphics({x:0, y:0, add:false});
+      gPlayer.fillStyle(0xe74c3c, 1); // 몸통
+      gPlayer.fillCircle(32, 32, 26);
+      gPlayer.fillStyle(0xffe0bd, 1); // 얼굴
+      gPlayer.fillCircle(32, 24, 15);
+      gPlayer.fillStyle(0xf1c40f, 1); // 짚모자 챙
+      gPlayer.fillCircle(32, 32, 20);
+      gPlayer.fillStyle(0xd35400, 1); // 짚모자 꼭지
+      gPlayer.fillCircle(32, 32, 8);
+      gPlayer.generateTexture('player_texture', 64, 64);
 
-      const dropSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="12"><rect width="4" height="12" rx="2" fill="#74b9ff"/></svg>`;
-      const snowSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle cx="5" cy="5" r="4" fill="#ffffff"/></svg>`;
+      // 3. 빗방울 및 눈 결정
+      const gDrop = scene.make.graphics({x:0, y:0, add:false});
+      gDrop.fillStyle(0x74b9ff, 1);
+      gDrop.fillRoundedRect(0, 0, 4, 12, 2);
+      gDrop.generateTexture('drop_texture', 4, 12);
 
-      this.textures.addBase64('player', 'data:image/svg+xml;base64,' + btoa(playerSvg));
-      this.textures.addBase64('dirt', 'data:image/svg+xml;base64,' + btoa(dirtSvg));
-      this.textures.addBase64('drop', 'data:image/svg+xml;base64,' + btoa(dropSvg));
-      this.textures.addBase64('snow', 'data:image/svg+xml;base64,' + btoa(snowSvg));
+      const gSnow = scene.make.graphics({x:0, y:0, add:false});
+      gSnow.fillStyle(0xffffff, 1);
+      gSnow.fillCircle(4, 4, 4);
+      gSnow.generateTexture('snow_texture', 8, 8);
     }
 
     function create() {
       const scene = this;
+
+      // 캔버스 자체 생성 실행 (깨짐 문제 완벽 해결)
+      generateCustomTextures(scene);
 
       this.add.grid(0, 0, 3000, 3000, 64, 64, 0x55efc4, 1, 0x48dbfb, 0.2);
 
@@ -158,7 +170,7 @@
           const x = startX + col * 120;
           const y = startY + row * 120;
 
-          const tile = this.add.image(x, y, 'dirt').setInteractive().setScale(1);
+          const tile = this.add.image(x, y, 'dirt_texture').setInteractive();
           const cropGraphic = this.add.circle(x, y, 0, 0xffffff);
 
           const plotData = {
@@ -195,17 +207,17 @@
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
       });
 
-      player = this.physics.add.sprite(0, 300, 'player').setScale(0.85);
+      player = this.physics.add.sprite(0, 300, 'player_texture').setScale(0.85);
       targetPoint = new Phaser.Math.Vector2(0, 300);
 
       this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-      rainEmitter = this.add.particles(0, 0, 'drop', {
+      rainEmitter = this.add.particles(0, 0, 'drop_texture', {
         x: { min: -1000, max: 1000 }, y: -600,
         speedY: { min: 500, max: 800 }, lifespan: 1200, quantity: 4
       }).setScrollFactor(0).stop();
 
-      snowEmitter = this.add.particles(0, 0, 'snow', {
+      snowEmitter = this.add.particles(0, 0, 'snow_texture', {
         x: { min: -1000, max: 1000 }, y: -600,
         speedY: { min: 60, max: 140 }, speedX: { min: -40, max: 40 },
         lifespan: 2500, quantity: 3
